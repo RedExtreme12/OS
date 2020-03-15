@@ -4,49 +4,45 @@
 #include "employee.h"
 #include <stdlib.h>
 
-pid_t fork(void);
-
-void read_and_print_from_binary(int num_of_queries, FILE* input)
+void read_from_binary(FILE* input, struct employee* emp)
 {
-	for (int i = 0; i < num_of_queries; i++) {
-		struct employee emp;
-		fread(&emp, sizeof(struct employee), 1, input);
-
-		printf("%d %s %lf\n", emp.num, emp.name, emp.hours);
-	}
+	fread(&emp, sizeof(struct employee), 1, input);
 }
 
-void procces_work(const char* procces_name, char* params[])
+void print_employee_data(struct employee emp)
+{
+	printf("%d %s %lf\n", emp.num, emp.name, emp.hours);
+}
+
+int create_procces(const char* procces_name, char* params[])
 {
 	pid_t pid = vfork();
 
 	switch (pid)
 	{
-	case -1:
-	{
-		fprintf(stderr, "Unable to fork\n");
-	}
-	case 0:
-	{
-		if (execv(procces_name, params) == -1)
+		case -1:
 		{
-			fprintf(stderr, "Unable to exec\n");
-			break;
+			perror("Unable to fork\n");
 		}
-	}
-	default:
-	{
-		int status;
-		waitpid(pid, &status, 0);
-		int exit_code = WEXITSTATUS(status);
+		case 0:
+		{
+			if (execv(procces_name, params) == -1)
+			{
+				perror("Unable to exec\n");
+				break;	
+			}
+		}
+		default:
+		{
+			int status;
+			waitpid(pid, &status, 0);
+			int exit_code = WEXITSTATUS(status);
 
-		if (exit_code) {
-			printf("P> Exit code = %d\n", exit_code);
+			return exit_code;
 		}
-		printf("\n");
-		break;
 	}
-	}
+
+	return 0;
 }
 
 int main() {
@@ -66,7 +62,10 @@ int main() {
 	creator_params[0] = binary_file_name;
 	creator_params[1] = num_of_queries;
 
-	procces_work("Creator", creator_params);
+	int error_code;
+
+	if ((error_code = create_procces("Creator", creator_params)))
+		return error_code;
 
 	FILE* binary_input = fopen(binary_file_name, "rb");
 
@@ -75,7 +74,13 @@ int main() {
 		int num;
 		fscanf(binary_input, "%d", &num);
 
-		read_and_print_from_binary(num, binary_input);
+		for (int i = 0; i < num; i++)
+		{
+			struct employee emp;
+
+			read_from_binary(binary_input, &emp);
+			print_employee_data(emp);
+		}
 
 		fclose(binary_input);
 	}
@@ -99,20 +104,18 @@ int main() {
 	reporter_params[1] = report_file_name;
 	reporter_params[2] = hourly_payment;
 
-	procces_work("Reporter", reporter_params);
+	if ((error_code = create_procces("Reporter", reporter_params)))
+		return error_code;
 
 	FILE* report_file = fopen(report_file_name, "r");
 
 	if (report_file)
 	{
-		if (report_file != 0)
-		{
-			char line[100];
-			while (fgets(line, 100, report_file) != NULL)
-				printf("%s", line);
+		char line[100];
+		while (fgets(line, 100, report_file) != NULL)
+			printf("%s", line);
 
-			fclose(report_file);
-		}
+		fclose(report_file);
 	}
 
 	return 0;
